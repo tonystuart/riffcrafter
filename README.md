@@ -15,7 +15,7 @@ Here, we see the Graphical View. Each channel (instrument) in the MIDI file is a
 
 You can use the mouse to select and play a group of notes, or press the Play button to play the MIDI file. As the MIDI file plays, it scrolls to the left.
 
-![Screen capture for Graphical View](README.metadata/images/01-GraphicalView.png "Graphical View")
+![Screen capture for Graphical View](README.metadata/01-GraphicalView.png "Graphical View")
 
 # Staff View
 
@@ -27,7 +27,7 @@ With both the Staff View and the Graphical View, if the MIDI file contains lyric
 
 The Staff View scrolls to the left as the MIDI file plays. 
 
-![Screen capture for Staff View](README.metadata/images/02-StaffView.png "Staff View")
+![Screen capture for Staff View](README.metadata/02-StaffView.png "Staff View")
 
 # Event View
 
@@ -37,7 +37,7 @@ Notes that you select in the Graphical or Staff Views are highlighted in the Eve
 
 The Event View scrolls up as the MIDI file plays.
 
-![Screen capture for Event View](README.metadata/images/03-EventView.png "Event View")
+![Screen capture for Event View](README.metadata/03-EventView.png "Event View")
 
 # Analyzer
 
@@ -49,31 +49,31 @@ With the Structure Analyzer, you can see notes, chords, measures, and unique or 
 
 The Key Analyzer shows the relationships between the notes you've selected in the structure analyzer, and determines which key the notes may be in, based on a scoring of the number of accidentals, tonic triads and tonic thirds.
 
-![Screen capture for Analyzer](README.metadata/images/04-Analyzer.png "Analyzer")
+![Screen capture for Analyzer](README.metadata/04-Analyzer.png "Analyzer")
 
 # Microphone Input
 
 The top right corner of the screen contains the input tabs. Here we see the tab for microphone input, which uses a Fast Fourier Transform (FFT) to convert sound pressure (audio) to pitch (notes). These notes can then be saved in a MIDI file. The quality of the result depends on many factors, some of which are very hard to control. This is an experimental feature and you may want to modify the source code to try various alternatives. You can also experiment with the Sensitivity, Clip and Duration sliders that are present on this tab.
 
-![Screen capture for Microphone Input](README.metadata/images/05-MicrophoneInput.png "Microphone Input")
+![Screen capture for Microphone Input](README.metadata/05-MicrophoneInput.png "Microphone Input")
 
 # MIDI Input
 
 The MIDI input tab lets you connect a MIDI controller, such as a piano keyboard or drum pads, to RiffCrafter. The MIDI Input Device drop down displays a list of available midi devices. If you plug in a new device, press the Refresh Device List button so that the device will appear in the list.
 
-![Screen capture for MIDI Input](README.metadata/images/06-MidiInput.png "Midi Input")
+![Screen capture for MIDI Input](README.metadata/06-MidiInput.png "Midi Input")
 
 # Keyboard Input
 
 The default input source is the onscreen keyboard. You can click the keys with the mouse. The Volume, Duration and Articulation buttons let you control how the notes are added to the current MIDI channel.
 
-![Screen capture for Keyboard Input](README.metadata/images/07-KeyboardInput.png "Keyboard Input")
+![Screen capture for Keyboard Input](README.metadata/07-KeyboardInput.png "Keyboard Input")
 
 # Commands
 
 As an alternative to the keyboard, MIDI and microphone input methods, you can add notes to a MIDI file using character based commands. This gives you a lot of control over the music by letting you explicitly specify location, channel, note, velocity (loudness), duration and many other properties.
 
-![Screen capture for Commands](README.metadata/images/08-Commands.png "Commands")
+![Screen capture for Commands](README.metadata/08-Commands.png "Commands")
 
 # Jam Sessions
 
@@ -83,7 +83,7 @@ To start a Jam Session, click the Jam Sessions tab, select an instant messaging 
 
 You can send messages, select and send riffs, receive riffs, and save them into a MIDI file.
 
-![Screen capture for Jam Sessions](README.metadata/images/09-JamSessions.png "Jam Sessions")
+![Screen capture for Jam Sessions](README.metadata/09-JamSessions.png "Jam Sessions")
 
 # Making Music
 
@@ -91,7 +91,7 @@ To create something new, just click the "New" toolbar button on the left or sele
 
 You've got dozens of instruments to experiment with, as well as plenty of menu items that let you do things like increase or decrease the pitch, or move notes from one channel (instrument) to another. You can also use the control features on the right to mute or solo one or more channels.
 
-![Screen capture for Making Music](README.metadata/images/10-MakingMusic.png "Making Music")
+![Screen capture for Making Music](README.metadata/10-MakingMusic.png "Making Music")
 
 # More on the Musical Instrument Digital Interface (MIDI)
 
