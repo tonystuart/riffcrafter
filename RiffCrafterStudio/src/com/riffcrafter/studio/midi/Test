@@ -1,0 +1,1336 @@
+package afs.midi;
+
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.event.ComponentEvent;
+import java.awt.event.ComponentListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.NavigableSet;
+
+import javax.swing.ImageIcon;
+import javax.swing.JPanel;
+
+import afs.util.Resources;
+
+public class Notator extends JPanel
+{
+  private static final int Y_PIXELS_PER_STAFF = 95;
+
+  private ArrayList<NotatorListener> listeners = new ArrayList<NotatorListener>();
+
+  private static final int MINIMUM_WIDTH_IN_PIXELS = 300;
+  private static final int DETAILS_TOP_MARGIN = 7;
+  private static final int DETAILS_BOTTOM_MARGIN = 9;
+
+  public static final int TICKS_PER_PIXEL = 10;
+  private static final int NOTE_VERTICAL_SPACING = 3;
+  private static final int HIGHLIGHT_WIDTH = 3;
+
+  private static final int NOTE_HEIGHT = NOTE_VERTICAL_SPACING;
+  private static final int ARC_WIDTH = NOTE_VERTICAL_SPACING;
+  private static final int ARC_HEIGHT = NOTE_VERTICAL_SPACING;
+
+  private static final int MH = 4;
+  private static final int MHM = (MH / 2);
+  private static final int MW = 4;
+  private static final int MWM = (MW / 2);
+  private static final int GAP = 1;
+
+  public static final Color LIGHT_CORAL = new Color(0xF0, 0x80, 0x80, 0x80);
+
+  public static final Color FRAME = Color.DARK_GRAY;
+  public static final Color HIGHLIGHT = LIGHT_CORAL;
+  public static final Color BACKGROUND = Color.BLACK;
+
+  public static final Color c00 = new Color(0xff, 0x00, 0x00);
+  public static final Color c01 = new Color(0xff, 0xff, 0x00);
+  public static final Color c02 = new Color(0xff, 0x00, 0xff);
+  public static final Color c03 = new Color(0xff, 0xff, 0xff);
+
+  public static final Color c04 = new Color(0x3f, 0xff, 0x3f);
+  public static final Color c05 = new Color(0xff, 0xff, 0x7f);
+  public static final Color c06 = new Color(0xff, 0x7f, 0xbf);
+  public static final Color c07 = new Color(0xbf, 0xbf, 0xbf);
+
+  public static final Color c08 = new Color(0x7f, 0xbf, 0xbf);
+  public static final Color c09 = Color.ORANGE; // new Color(0x7f, 0x7f, 0xbf);
+  public static final Color c10 = new Color(0x7f, 0xbf, 0x7f);
+  public static final Color c11 = new Color(0x7f, 0x7f, 0x7f);
+
+  public static final Color c12 = new Color(0x3f, 0xff, 0xff);
+  public static final Color c13 = new Color(0x3f, 0x3f, 0xff);
+  public static final Color c14 = new Color(0xff, 0x7f, 0x7f);
+  public static final Color c15 = new Color(0x7f, 0x3f, 0xff);
+
+  public static final Color[] colors = new Color[] { c00, c01, c02, c03, c04, c05, c06, c07, c08, c09, c10, c11, c12, c13, c14, c15 };
+
+  private static final BasicStroke normalStroke = new BasicStroke(1f);
+  private static final BasicStroke wideStroke = new BasicStroke(2f);
+  private static final BasicStroke dottedStroke = new BasicStroke(1f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND, 1f, new float[] { 2f }, 0f);
+
+  private static final int CHANNEL_SPECIFIC_SCALE = 0;
+  private static final int CHANNEL_SPECIFIC_SCALE_ALL = 1;
+  private static final int CHANNEL_COMMON_SCALE = 2;
+  private static final int CHANNEL_STYLE_MAX = 3;
+
+  public static final int PITCH_TIME = 0;
+  public static final int CONVENTIONAL = 1;
+
+  private int channelStyle = CHANNEL_SPECIFIC_SCALE;
+  private int overallLowestKey;
+  private int overallHighestKey;
+
+  private Midi midi;
+
+  public int ticksPerPixel = TICKS_PER_PIXEL;
+  private int ticksPerLine = MINIMUM_WIDTH_IN_PIXELS * ticksPerPixel; // Initial value only -- recalculated on first parent component layout
+
+  private long currentTick;
+  private long firstTick;
+  private long lastTick;
+
+  private int[] activeChannelMap;
+  private int[] channelNoteCounts;
+  private int[] channelInstruments;
+  private String[] channelTitles;
+  private String[] channelRanges;
+
+  private MidiMouseListener midiMouseListener = new MidiMouseListener();
+  private NotatorMidiListener notatorMidiListener = new NotatorMidiListener();
+  private MidiComponentListener midiComponentListener = new MidiComponentListener();
+
+  private Rectangle selectionRectangleInTicks;
+  private Midi selection;
+
+  // NB: The following fields are maintained for performance reasons
+
+  private int width;
+  private int height;
+  private int leftMargin;
+  private Font font;
+  private int fontHeight;
+  private int fontWidth;
+  private int[] channelOffsets;
+  private int[] reverseChannelMap = new int[MidiConstants.MAX_CHANNELS];
+
+  private NavigableSet<Midel> midiView;
+
+  private boolean isUpdateTickMetrics;
+  private boolean isUpdateMidiDependencies;
+
+  private int type;
+
+  public Notator(Midi midi, int type)
+  {
+    super(null);
+    this.midi = midi;
+    this.type = type;
+
+    if (midi.size() == 0)
+    {
+      channelStyle = CHANNEL_SPECIFIC_SCALE_ALL;
+    }
+
+    addMouseListener(midiMouseListener);
+    addComponentListener(midiComponentListener);
+    setFocusable(true);
+    requestFocusInWindow(true);
+
+    initializeFontMetrics();
+
+    midi.addMidiListener(notatorMidiListener);
+    setBackground(BACKGROUND);
+    setOpaque(true);
+    setToolTipText("");
+
+    channelInstruments = new int[MidiConstants.MAX_CHANNELS];
+    channelTitles = new String[MidiConstants.MAX_CHANNELS];
+    channelRanges = new String[MidiConstants.MAX_CHANNELS];
+    Arrays.fill(channelInstruments, -1);
+
+    isUpdateMidiDependencies = true;
+    isUpdateTickMetrics = true;
+
+    // Get height for vertical scroll bar
+    updateMidiDependencies();
+  }
+
+  //      0
+  //  y0: top inset
+  //  y1: fontHeight              Measure Text
+  //  y2: GAP + MHM               SysexEvent Marker Height Midpoint
+  //      MHM
+  //  y3: GAP + fontHeight        Optional Lyrics Text
+  //  y4: 4 * GAP                 Bottom of Nonscrolling Area
+  //  y5: GAP + MHM               MetaEvent Marker Height Midpoint
+  //      MHM
+  //  y6: GAP                     Base of Channels
+
+  private int y0;
+  private int y1;
+  private int y2;
+  private int y3;
+  private int y4;
+  private int y5;
+  private int y6;
+
+  private int verticalOffset;
+
+  private void calculateMetrics()
+  {
+    y0 = 2;
+    y1 = y0 + fontHeight;
+    y2 = y1 + GAP + MHM;
+    y3 = y2 + MHM;
+    if (midi.containsLyrics())
+    {
+      y3 += GAP + fontHeight;
+    }
+    y4 = y3 + 4 * GAP;
+    y5 = y4 + GAP + MHM;
+    y6 = y5 + MHM + fontHeight;
+  }
+
+  private void initializeFontMetrics()
+  {
+    font = getFont().deriveFont(9f);
+    FontMetrics fontMetrics = getFontMetrics(font);
+    fontHeight = fontMetrics.getAscent();
+    fontWidth = fontMetrics.charWidth('M');
+  }
+
+  public void toggleChannelStyle()
+  {
+    channelStyle = (channelStyle + 1) % CHANNEL_STYLE_MAX;
+    scheduleUpdateMidiDependencies();
+  }
+
+  private void updateInstruments()
+  {
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      int channel = activeChannelMap[i];
+      updateInstrument(channel, currentTick);
+    }
+  }
+
+  private void updateInstrument(int channel, long tick)
+  {
+    int instrument = midi.getProgram(channel, tick);
+    if (instrument != channelInstruments[channel])
+    {
+      updateChannelTitle(channel, instrument);
+      fireInstrumentChange(channel, instrument);
+      channelInstruments[channel] = instrument;
+    }
+  }
+
+  private void updateChannelTitle(int channel, int instrument)
+  {
+    String instrumentName;
+    if (channel == Instruments.DRUM_CHANNEL)
+    {
+      // Some MIDI files contain a ProgramChange event for DRUM_CHANNEL
+      instrumentName = Instruments.DRUM_SET;
+    }
+    else
+    {
+      instrumentName = Instruments.getProgramName(instrument);
+    }
+
+    int channelNumber = Channel.getChannelNumber(channel);
+    channelTitles[channel] = "Channel " + channelNumber + ":  " + instrumentName;
+    repaint();
+  }
+
+  private void scheduleUpdateTickMetrics(long currentTick, boolean isRequired)
+  {
+    if (isRequired || Math.abs(currentTick - this.currentTick) > ticksPerPixel)
+    {
+      this.currentTick = currentTick;
+      isUpdateTickMetrics = true;
+      repaint();
+    }
+  }
+
+  private void updateTickMetrics()
+  {
+    if (isUpdateTickMetrics)
+    {
+      firstTick = currentTick - (ticksPerLine / 2);
+      lastTick = currentTick + (ticksPerLine / 2);
+      midiView = midi.getSet(firstTick - leftMargin, lastTick);
+      isUpdateTickMetrics = false;
+    }
+  }
+
+  private void scheduleUpdateMidiDependencies()
+  {
+    isUpdateMidiDependencies = true;
+    repaint();
+  }
+
+  private void updateMidiDependencies()
+  {
+    if (isUpdateMidiDependencies)
+    {
+      calculateMetrics();
+      leftMargin = midi.findTicksPerMeasure(currentTick) * 2;
+
+      int ticksPerPixel = TICKS_PER_PIXEL;
+      if (midi.containsLyrics())
+      {
+        int ticksPerLetter = midi.getTicksPerLetter(); // e.g. 40 ticks per 'm'
+        ticksPerPixel = ticksPerLetter / fontWidth;
+      }
+      setTicksPerPixel(ticksPerPixel);
+
+      initializeActiveChannelMap();
+      initializeReverseChannelMap();
+
+      int width = MINIMUM_WIDTH_IN_PIXELS;
+      int height = initializeChannelOffsets();
+
+      setPreferredSize(new Dimension(width, height));
+      setMinimumSize(new Dimension(0, height));
+      setMaximumSize(new Dimension(Integer.MAX_VALUE, height));
+
+      isUpdateMidiDependencies = false;
+    }
+  }
+
+  private void setTicksPerPixel(int ticksPerPixel)
+  {
+    this.ticksPerPixel = ticksPerPixel;
+    setTicksPerLine();
+  }
+
+  private void setTicksPerLine()
+  {
+    int width = getWidth();
+    ticksPerLine = width * ticksPerPixel;
+  }
+
+  private void initializeActiveChannelMap()
+  {
+    if (channelStyle == CHANNEL_SPECIFIC_SCALE_ALL)
+    {
+      activeChannelMap = new int[MidiConstants.MAX_CHANNELS];
+      for (int i = 0; i < activeChannelMap.length; i++)
+      {
+        activeChannelMap[i] = i;
+      }
+    }
+    else
+    {
+      activeChannelMap = midi.getActiveChannels();
+    }
+
+    channelNoteCounts = new int[activeChannelMap.length];
+
+    if (channelStyle == CHANNEL_COMMON_SCALE)
+    {
+      // Need to make extra pass through to find lowest and highest
+      overallLowestKey = 127;
+      overallHighestKey = 0;
+      for (int i = 0; i < activeChannelMap.length; i++)
+      {
+        int channel = activeChannelMap[i];
+        Statistics statistics = midi.getStatistics(channel);
+        int lowestKey = statistics.getLowestKey();
+        int highestKey = statistics.getHighestKey();
+        overallLowestKey = Math.min(overallLowestKey, lowestKey);
+        overallHighestKey = Math.max(overallHighestKey, highestKey);
+      }
+    }
+
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      int channel = activeChannelMap[i];
+      Statistics statistics = midi.getStatistics(channel);
+      int lowestKey = getLowestKey(statistics);
+      int highestKey = getHighestKey(statistics);
+      channelNoteCounts[i] = (highestKey - lowestKey) + 1; // +1 because they're inclusive
+    }
+
+  }
+
+  private void initializeReverseChannelMap()
+  {
+    for (int i = 0; i < reverseChannelMap.length; i++)
+    {
+      reverseChannelMap[i] = -1;
+    }
+
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      reverseChannelMap[activeChannelMap[i]] = i;
+    }
+  }
+
+  private int initializeChannelOffsets()
+  {
+    channelOffsets = new int[activeChannelMap.length];
+
+    int y = y6;
+
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      int channel = activeChannelMap[i];
+      getChannelRange(channel);
+
+      if (i > 0)
+      {
+        y += DETAILS_TOP_MARGIN;
+      }
+
+      y += fontHeight;
+      y += DETAILS_BOTTOM_MARGIN;
+
+      channelOffsets[i] = y;
+
+      if (type == PITCH_TIME)
+      {
+        y += channelNoteCounts[i] * NOTE_VERTICAL_SPACING;
+      }
+      else if (type == CONVENTIONAL)
+      {
+        y += Y_PIXELS_PER_STAFF;
+      }
+    }
+
+    y += DETAILS_BOTTOM_MARGIN;
+
+    return y;
+  }
+
+  public void getChannelRange(int channel)
+  {
+    String text = "";
+    Statistics channelStatistics = midi.getStatistics(channel);
+    int lowestKey = getLowestKey(channelStatistics);
+    int highestKey = getHighestKey(channelStatistics);
+    if (lowestKey != 0 && highestKey != 0)
+    {
+      if (channel == Instruments.DRUM_CHANNEL)
+      {
+        text = "  (" + lowestKey + ") - " + " (" + highestKey + ")";
+      }
+      else
+      {
+        String lowestKeyName = NoteName.getNoteName(lowestKey);
+        String highestKeyName = NoteName.getNoteName(highestKey);
+        text = "  " + lowestKeyName + " (" + lowestKey + ") - " + highestKeyName + " (" + highestKey + ")";
+      }
+    }
+    channelRanges[channel] = text;
+  }
+
+  public Rectangle getSelectionRectangleInTicks()
+  {
+    return selectionRectangleInTicks;
+  }
+
+  public void selectNotes(boolean isAppendToSelection)
+  {
+    if (!isAppendToSelection || selection == null)
+    {
+      selection = new Midi();
+    }
+
+    selectNotes(selection, selectionRectangleInTicks, isAppendToSelection);
+
+    fireSelect(selection);
+
+    String hoverText = "";
+    if (selection.size() == 1)
+    {
+      hoverText = selection.first().getToolTipText();
+    }
+    fireHover(hoverText);
+  }
+
+  public void selectNotes(Midi target, Rectangle rectangleInTicks, boolean isAppendToSelection)
+  {
+    int left = rectangleInTicks.x;
+    int right = left + rectangleInTicks.width;
+    int top = rectangleInTicks.y;
+    int bottom = top + rectangleInTicks.height;
+
+    for (Midel midel : midi.getSet(left - leftMargin, right))
+    {
+      long tick = midel.getTick();
+      long duration = 0;
+
+      if (midel instanceof Note)
+      {
+        Note note = (Note)midel;
+        duration = note.getDuration();
+      }
+
+      if ((left < (tick + duration) && (right > tick)))
+      {
+        int y = adjustY(getY(midel));
+
+        if ((top < (y + NOTE_HEIGHT)) && (bottom > y))
+        {
+          if (isAppendToSelection && target.contains(midel))
+          {
+            target.remove(midel);
+          }
+          else
+          {
+            target.add(midel);
+          }
+        }
+      }
+    }
+
+  }
+
+  private Rectangle expandPoint(Point point)
+  {
+    return new Rectangle(point.x - 1, point.y - 1, 2, 2);
+  }
+
+  private Rectangle expandRectangle(Point pointInTicks)
+  {
+    int x = pointInTicks.x - ticksPerPixel * MWM;
+    int y = pointInTicks.y - MHM;
+    int width = ticksPerPixel * MW;
+    int height = MH;
+
+    return new Rectangle(x, y, width, height);
+  }
+
+  public Note findNoteAt(Iterable<Midel> iterable, Point pointInTicks)
+  {
+    Rectangle rectangleInTicks = expandPoint(pointInTicks);
+
+    int left = rectangleInTicks.x;
+    int right = rectangleInTicks.x + rectangleInTicks.width;
+    int top = rectangleInTicks.y;
+    int bottom = rectangleInTicks.y + rectangleInTicks.height;
+
+    for (Midel midel : iterable)
+    {
+      if (midel instanceof Note)
+      {
+        Note note = (Note)midel;
+
+        long tick = note.getTick();
+        long duration = note.getDuration();
+
+        if ((left < (tick + duration) && (right > tick)))
+        {
+          int y = adjustY(getY(note));
+
+          if ((top < (y + NOTE_HEIGHT)) && (bottom > y))
+          {
+            return note;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  @Override
+  public String getToolTipText(MouseEvent e)
+  {
+    Point pointInTicks = getTicks(e.getPoint());
+    Rectangle selectionRectangleInTicks = expandRectangle(pointInTicks);
+
+    Midi selectionMidi = new Midi();
+
+    selectNotes(selectionMidi, selectionRectangleInTicks, false);
+
+    StringBuffer toolTipText = new StringBuffer();
+
+    for (Midel midel : selectionMidi.getMidels())
+    {
+      if (toolTipText.length() > 0)
+      {
+        toolTipText.append(";  ");
+      }
+      toolTipText.append(midel.getToolTipText());
+    }
+
+    fireHover(toolTipText.toString());
+    return null;
+  }
+
+  public void setVerticalOffset(int verticalOffset)
+  {
+    this.verticalOffset = verticalOffset;
+  }
+
+  private void paintBackground(Graphics g)
+  {
+    if (isOpaque())
+    {
+      // TODO: Figure out how to factor out a base class such that all references to PITCH_TIME and CONVENTIONAL are supplied as overrides
+      if (type == PITCH_TIME)
+      {
+        g.setColor(getBackground());
+      }
+      else if (type == CONVENTIONAL)
+      {
+        g.setColor(Color.WHITE);
+      }
+      g.fillRect(0, 0, width, height);
+    }
+  }
+
+  @Override
+  protected void paintComponent(Graphics g)
+  {
+    Graphics2D g2d = (Graphics2D)g;
+
+    updateMidiDependencies();
+    updateInstruments();
+    updateTickMetrics();
+
+    width = getWidth();
+    height = getHeight();
+    int ticksPerMeasure = midi.findTicksPerMeasure(currentTick);
+
+    paintBackground(g2d);
+
+    if (type == PITCH_TIME)
+    {
+      paintHighlight(g2d);
+    }
+
+    long firstMeasureTick = (firstTick / ticksPerMeasure) * ticksPerMeasure;
+    long lastMeasureTick = (lastTick / ticksPerMeasure) * ticksPerMeasure;
+
+    if (type == PITCH_TIME)
+    {
+      g2d.setColor(FRAME);
+    }
+    else if (type == CONVENTIONAL)
+    {
+      g2d.setColor(Color.BLACK);
+    }
+
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      if (type == PITCH_TIME)
+      {
+        int channel = activeChannelMap[i];
+        Statistics statistics = midi.getStatistics(channel);
+        int firstLine = getLowestKey(statistics);
+        int lastLine = getHighestKey(statistics) + 1;
+        for (int j = firstLine; j <= lastLine; j++)
+        {
+          int y = adjustY(getY(i, j - firstLine));
+          g2d.drawLine(0, y, width, y);
+        }
+        for (long j = firstMeasureTick; j <= lastMeasureTick; j += ticksPerMeasure)
+        {
+          int x = getX(j);
+          int y1 = adjustY(getY(i, 0));
+          int y2 = adjustY(getY(i, lastLine - firstLine));
+          g2d.drawLine(x, y1, x, y2);
+        }
+      }
+      else if (type == CONVENTIONAL)
+      {
+        drawStaff(g2d, i, firstMeasureTick, lastMeasureTick, ticksPerMeasure);
+      }
+    }
+
+    for (int i = 0; i < activeChannelMap.length; i++)
+    {
+      String title = "";
+      int channel = activeChannelMap[i];
+      if (type == PITCH_TIME)
+      {
+        g2d.setColor(colors[channel]);
+        title = channelTitles[channel] + channelRanges[channel];
+      }
+      else if (type == CONVENTIONAL)
+      {
+        title = channelTitles[channel];
+      }
+      int yTitle = adjustY(getYTitle(channel));
+      g2d.drawString(title, 5, yTitle);
+    }
+
+    ArrayList<MetaEvent> lyrics = new ArrayList<MetaEvent>();
+
+    for (Midel midel : midiView)
+    {
+      paint(g2d, midel, false, lyrics);
+    }
+
+    if (selection != null)
+    {
+      for (Midel midel : selection.getSet(firstTick - leftMargin, lastTick))
+      {
+        paint(g2d, midel, true, null);
+      }
+    }
+
+    if (selectionRectangleInTicks != null)
+    {
+      int x = getX(selectionRectangleInTicks.x);
+      int width = selectionRectangleInTicks.width / ticksPerPixel;
+      g2d.setColor(Color.GRAY);
+      g2d.setStroke(dottedStroke);
+      g2d.drawRect(x, selectionRectangleInTicks.y, width, selectionRectangleInTicks.height);
+    }
+
+    paintNonScrollingArea(g2d, ticksPerMeasure, lyrics);
+  }
+
+  // See http://en.wikipedia.org/wiki/Musical_staff
+
+  private void drawStaff(Graphics2D g2d, int channelIndex, long firstMeasureTick, long lastMeasureTick, long ticksPerMeasure)
+  {
+    int y = adjustY(getY(channelIndex, 0));
+
+    y += 20; // ledger lines
+
+    int trebleTop = y;
+
+    for (int j = 0; j < 5; j++)
+    {
+      g2d.drawLine(0, y, width, y);
+      y += 5;
+    }
+
+    int trebleBottom = y - 5;
+
+    y += 10;
+
+    int bassTop = y;
+
+    for (int j = 0; j < 5; j++)
+    {
+      g2d.drawLine(0, y, width, y);
+      y += 5;
+    }
+
+    int bassBottom = y - 5;
+
+    y += 20; // ledger lines
+
+    for (long j = firstMeasureTick; j <= lastMeasureTick; j += ticksPerMeasure)
+    {
+      int x = getX(j);
+      g2d.drawLine(x, trebleTop, x, trebleBottom);
+      g2d.drawLine(x, bassTop, x, bassBottom);
+    }
+  }
+
+  private void paintHighlight(Graphics2D g2d)
+  {
+    int currentX = getX(currentTick);
+    g2d.setColor(HIGHLIGHT);
+    g2d.fillRect(currentX, 0, HIGHLIGHT_WIDTH, getHeight());
+  }
+
+  private void paintNonScrollingArea(Graphics2D g2d, int ticksPerMeasure, ArrayList<MetaEvent> lyrics)
+  {
+    StringBuffer buffer = new StringBuffer(64);
+
+    buffer.append("Measure: ");
+    buffer.append(Long.toString(currentTick / ticksPerMeasure));
+    buffer.append(", Tick: ");
+    buffer.append(Long.toString(currentTick));
+
+    TimeSignatureChange timeSignatureChange = midi.findTimeSignatureChange(currentTick);
+    if (timeSignatureChange != null)
+    {
+      buffer.append(", ");
+      buffer.append(timeSignatureChange.getToolTipText());
+    }
+
+    TempoChange tempoChange = midi.findTempoChange(currentTick);
+    if (tempoChange != null)
+    {
+      buffer.append(", ");
+      buffer.append(tempoChange.getToolTipText());
+    }
+
+    String heading = buffer.toString();
+    FontMetrics fontMetrics = g2d.getFontMetrics();
+    int stringWidth = fontMetrics.stringWidth(heading);
+    int x = (width - stringWidth) / 2;
+
+    g2d.setColor(FRAME);
+    g2d.fillRect(0, 0, width, y4);
+
+    g2d.setColor(Color.WHITE);
+    g2d.drawString(buffer.toString(), x, y1);
+
+    g2d.setFont(font);
+
+    for (MetaEvent metaEvent : lyrics)
+    {
+      long tick = metaEvent.getTick();
+      x = getX(tick);
+      String string = metaEvent.getText();
+      g2d.drawString(string, x, y3);
+    }
+  }
+
+  private void paint(Graphics2D g2d, Midel midel, boolean isSelected, ArrayList<MetaEvent> lyrics)
+  {
+    if (midel instanceof Note)
+    {
+      if (type == PITCH_TIME)
+      {
+        paint(g2d, (Note)midel, isSelected);
+      }
+      else if (type == CONVENTIONAL)
+      {
+        paintConventional(g2d, (Note)midel, isSelected);
+      }
+    }
+    else if (midel instanceof ChannelEvent)
+    {
+      paint(g2d, (ChannelEvent)midel, isSelected);
+    }
+    else if (midel instanceof MetaEvent)
+    {
+      paint(g2d, (MetaEvent)midel, isSelected, lyrics);
+    }
+    else if (midel instanceof SysexEvent)
+    {
+      paint(g2d, (SysexEvent)midel, isSelected);
+    }
+
+  }
+
+  // TODO: Factor out common code with KeyboardSettings
+//  add("Note-16n-16x16.png", 64, "16th note, 64 ticks");
+//  add("Note-08n-16x16.png", 128, "8th note, 128 ticks");
+//  add("Note-08d-16x16.png", 192, "Dotted 8th note, 192 ticks");
+//  add("Note-04n-16x16.png", 250, "Quarter note, 250 ticks", true);
+//  add("Note-04d-16x16.png", 375, "Dotted quarter note, 375 ticks");
+//  add("Note-02n-16x16.png", 500, "Half note, 500 ticks");
+//  add("Note-02d-16x16.png", 750, "Dotted half note, 750 ticks");
+//  add("Note-01n-16x16.png", 1000, "Whole note, 1000 ticks");
+//  add("Note-00n-16x16.png", AS_PLAYED, "As played on keyboard");
+  
+  private static int[] keyX = new int[] { 0, 0, 2, 2, 5, 7, 7, 10, 10, 12, 12, 15 };
+  
+  private void paintConventional(Graphics2D g2d, Note note, boolean isSelected)
+  {
+    int channel = note.getChannel();
+    int channelIndex = reverseChannelMap[channel];
+    
+    long tick = note.getTick();
+    long duration = note.getDuration();
+    int key = note.getKey();
+    
+    int x = getX(tick);
+    int y = adjustY(getY(channelIndex, 0));
+    
+    int octave = key / 12;
+    int keyIndex = key % 12;
+
+    octave -= 3;
+    
+    y += Y_PIXELS_PER_STAFF;
+    y -= 2;
+    y -= (octave * 30) + keyX[keyIndex];
+    
+    System.out.println("key="+key+", y="+y);
+
+    String imageName;
+
+    if (duration < (63 + 32))
+    {
+      imageName = "Note-16n-16x16.png";
+    }
+    else if (duration < 128 + 64)
+    {
+      imageName = "Note-08n-16x16.png";
+    }
+    else if (duration < 192 + (250-192)/2)
+    {
+      imageName = "Note-08d-16x16.png";
+    }
+    else if (duration < 250 + (375-250)/2)
+    {
+      imageName = "Note-04n-16x16.png";
+    }
+    else if (duration < 375 + (500-375)/2)
+    {
+      imageName = "Note-04d-16x16.png";
+    }
+    else if (duration < 500 + (750-500)/2)
+    {
+      imageName = "Note-02n-16x16.png";
+    }
+    else if (duration < 750 + (1000-750)/2)
+    {
+      imageName = "Note-02d-16x16.png";
+    }
+    else
+    {
+      imageName = "Note-01n-16x16.png";
+    }
+
+    ImageIcon image = Resources.getIconByFileName(imageName);
+    
+    g2d.drawImage(image.getImage(), x, y, null);
+  }
+
+  private void paint(Graphics2D g2d, Note note, boolean isSelected)
+  {
+    int channel = note.getChannel();
+    long tick = note.getTick();
+    long duration = note.getDuration();
+
+    int x = getX(tick);
+    int y = adjustY(getY(note));
+
+    int width = getX(tick + duration) - x;
+
+    g2d.setColor(colors[channel]);
+    g2d.setStroke(normalStroke);
+
+    if (isSelected)
+    {
+      if (channel == Instruments.DRUM_CHANNEL)
+      {
+        g2d.setStroke(wideStroke);
+        g2d.drawLine(x, y, x + width, y + 5);
+        g2d.drawLine(x, y + 5, x + width, y);
+        g2d.setStroke(normalStroke);
+      }
+      else
+      {
+        g2d.fillRoundRect(x, y, width, NOTE_HEIGHT + 1, ARC_WIDTH, ARC_HEIGHT + 1);
+      }
+    }
+    else
+    {
+      if (channel == Instruments.DRUM_CHANNEL)
+      {
+        g2d.drawLine(x, y, x + width, y + 5);
+        g2d.drawLine(x, y + 5, x + width, y);
+      }
+      else
+      {
+        g2d.drawRoundRect(x, y, width, NOTE_HEIGHT, ARC_WIDTH, ARC_HEIGHT);
+      }
+    }
+  }
+
+  private void paint(Graphics2D g2d, ChannelEvent channelEvent, boolean isSelected)
+  {
+    long tick = channelEvent.getTick();
+    int channel = channelEvent.getChannel();
+    int x = getX(tick);
+    int y = adjustY(getY(channelEvent));
+
+    g2d.setColor(colors[channel]);
+
+    if (isSelected)
+    {
+      g2d.setStroke(wideStroke);
+      g2d.drawLine(x, y - MHM, x, y + MHM);
+      g2d.drawLine(x - MWM, y, x + MWM, y);
+      g2d.setStroke(normalStroke);
+    }
+    else
+    {
+      g2d.drawLine(x, y - MHM, x, y + MHM);
+      g2d.drawLine(x - MWM, y, x + MWM, y);
+    }
+  }
+
+  private void paint(Graphics2D g2d, MetaEvent metaEvent, boolean isSelected, ArrayList<MetaEvent> lyrics)
+  {
+    long tick = metaEvent.getTick();
+    int type = metaEvent.getType();
+
+    int x = getX(tick);
+
+    g2d.setColor(Color.WHITE);
+
+    if (lyrics != null && isLyrics(type, tick))
+    {
+      lyrics.add(metaEvent);
+    }
+
+    if (isSelected)
+    {
+      g2d.setStroke(wideStroke);
+      drawMetaEventMarker(g2d, x);
+      g2d.setStroke(normalStroke);
+    }
+    else
+    {
+      drawMetaEventMarker(g2d, x);
+    }
+
+  }
+
+  private void drawMetaEventMarker(Graphics2D g2d, int x)
+  {
+    // See also: getY(Midel midel)
+    int top = adjustY(y5 - MWM);
+    int middle = adjustY(y5);
+    int bottom = adjustY(y5 + MHM);
+
+    g2d.drawLine(x - MWM, middle, x, top);
+    g2d.drawLine(x, top, x + MWM, middle);
+    g2d.drawLine(x + MWM, middle, x, bottom);
+    g2d.drawLine(x, bottom, x - MWM, middle);
+  }
+
+  private final boolean isLyrics(int type, long tick)
+  {
+    return tick > 0 && type == midi.getLyricType();
+  }
+
+  private void paint(Graphics2D g2d, SysexEvent sysexEvent, boolean isSelected)
+  {
+    long tick = sysexEvent.getTick();
+
+    int x = getX(tick);
+
+    g2d.setColor(Color.GREEN);
+
+    if (isSelected)
+    {
+      g2d.setStroke(wideStroke);
+      g2d.drawRect(x - MWM, y2 - MHM, NOTE_HEIGHT, NOTE_HEIGHT);
+      g2d.setStroke(normalStroke);
+    }
+    else
+    {
+      g2d.drawRect(x - MWM, y2 - MHM, NOTE_HEIGHT, NOTE_HEIGHT);
+    }
+
+  }
+
+  public final void onTickChange(long tick)
+  {
+    scheduleUpdateTickMetrics(tick, false);
+  }
+
+  public final int getX(long tick)
+  {
+    int x = ((int)(tick - firstTick)) / ticksPerPixel;
+    return x;
+  }
+
+  public final int getY(int channelPosition, int noteIndex)
+  {
+    return channelOffsets[channelPosition] + (noteIndex * NOTE_VERTICAL_SPACING);
+  }
+
+  private int getY(Midel midel)
+  {
+    int y;
+    if (midel instanceof Note)
+    {
+      Note note = (Note)midel;
+      int channel = note.getChannel();
+      int key = note.getKey();
+      int highestKey = getHighestKey(midi.getStatistics(channel));
+      int channelPosition = reverseChannelMap[channel];
+      y = getY(channelPosition, highestKey - key);
+    }
+    else if (midel instanceof ChannelEvent)
+    {
+      ChannelEvent channelEvent = (ChannelEvent)midel;
+      int channel = channelEvent.getChannel();
+      int channelPosition = reverseChannelMap[channel];
+      if (channelPosition == -1)
+      {
+        // ChannelEvent for a channel that contains no Notes
+        return 0;
+      }
+      y = getY(channelPosition, 0) - NOTE_HEIGHT;
+    }
+    else if (midel instanceof MetaEvent)
+    {
+      y = y5;
+    }
+    else if (midel instanceof SysexEvent)
+    {
+      y = y2;
+    }
+    else
+    {
+      throw new RuntimeException("getY is unimplemented for supplied type.");
+    }
+    return y;
+  }
+
+  private int getYTitle(int channel)
+  {
+    int y = channelOffsets[reverseChannelMap[channel]] - DETAILS_BOTTOM_MARGIN;
+    return y;
+  }
+
+  private final int adjustY(int y)
+  {
+    y -= verticalOffset;
+    return y;
+  }
+
+  private int getHighestKey(Statistics statistics)
+  {
+    if (channelStyle == CHANNEL_COMMON_SCALE)
+    {
+      return overallHighestKey;
+    }
+    else
+    {
+      return statistics.getHighestKey();
+    }
+  }
+
+  private int getLowestKey(Statistics statistics)
+  {
+    if (channelStyle == CHANNEL_COMMON_SCALE)
+    {
+      return overallLowestKey;
+    }
+    else
+    {
+      return statistics.getLowestKey();
+    }
+  }
+
+  public int getTicksPerPixel()
+  {
+    return ticksPerPixel;
+  }
+
+  public final int getTicks(int x)
+  {
+    return (int)firstTick + (x * ticksPerPixel);
+  }
+
+  public Point getTicks(Point coordinates)
+  {
+    return new Point(getTicks(coordinates.x), coordinates.y);
+  }
+
+  public static Color getChannelColor(int channel)
+  {
+    return colors[channel];
+  }
+
+  public void addNotatorListener(NotatorListener listener)
+  {
+    listeners.add(listener);
+  }
+
+  public void removeNotatorListener(NotatorListener listener)
+  {
+    listeners.remove(listener);
+  }
+
+  private void fireSelect(Midi midi)
+  {
+    for (NotatorListener listener : listeners)
+    {
+      listener.fireSelect(midi);
+    }
+  }
+
+  private void fireMove(Midi midi, int deltaTicks, int deltaKeys)
+  {
+    for (NotatorListener listener : listeners)
+    {
+      listener.fireMove(midi, deltaTicks, deltaKeys);
+    }
+  }
+
+  private void fireInstrumentChange(int channel, int instrument)
+  {
+    for (NotatorListener listener : listeners)
+    {
+      listener.fireInstrumentChange(channel, instrument);
+    }
+  }
+
+  private void fireHover(String text)
+  {
+    for (NotatorListener listener : listeners)
+    {
+      listener.fireHover(text);
+    }
+  }
+
+  public interface NotatorListener
+  {
+    public void fireSelect(Midi midi);
+
+    public void fireMove(Midi midi, int deltaTicks, int deltaKeys);
+
+    public void fireHover(String text);
+
+    public void fireInstrumentChange(int channel, int instrument);
+  }
+
+  public class MidiMouseListener implements MouseListener, MouseMotionListener
+  {
+    private Point referencePointInTicks;
+    private boolean isMove;
+
+    public void mouseClicked(MouseEvent e)
+    {
+    }
+
+    public void mouseEntered(MouseEvent e)
+    {
+    }
+
+    public void mouseExited(MouseEvent e)
+    {
+    }
+
+    public void mousePressed(MouseEvent e)
+    {
+      addMouseMotionListener(midiMouseListener);
+      referencePointInTicks = getTicks(e.getPoint());
+      if (!e.isControlDown() && selection != null && findNoteAt(selection.getMidels(), referencePointInTicks.getLocation()) != null)
+      {
+        isMove = true;
+      }
+    }
+
+    public void mouseReleased(MouseEvent e)
+    {
+      if (isMove)
+      {
+        isMove = false;
+        referencePointInTicks = null;
+        return;
+      }
+
+      // See if this results in single note selection...
+      if (selectionRectangleInTicks == null && referencePointInTicks != null)
+      {
+        selectionRectangleInTicks = expandPoint(referencePointInTicks);
+      }
+
+      if (referencePointInTicks != null)
+      {
+        removeMouseMotionListener(midiMouseListener);
+        referencePointInTicks = null;
+      }
+
+      if (selectionRectangleInTicks != null)
+      {
+        selectNotes(e.isControlDown());
+        selectionRectangleInTicks = null;
+        repaint();
+      }
+
+    }
+
+    public void mouseDragged(MouseEvent e)
+    {
+      Point currentPointInTicks = getTicks(e.getPoint());
+      int x = Math.min(referencePointInTicks.x, currentPointInTicks.x);
+      int y = Math.min(referencePointInTicks.y, currentPointInTicks.y);
+
+      if (isMove)
+      {
+        int deltaTicks = currentPointInTicks.x - referencePointInTicks.x;
+        int deltaKeys = (referencePointInTicks.y - currentPointInTicks.y) / NOTE_VERTICAL_SPACING;
+        if (deltaTicks != 0 || deltaKeys != 0)
+        {
+          fireMove(selection, deltaTicks, deltaKeys);
+          if (deltaTicks != 0)
+          {
+            referencePointInTicks.x = currentPointInTicks.x;
+          }
+          if (deltaKeys != 0)
+          {
+            referencePointInTicks.y = currentPointInTicks.y;
+          }
+        }
+        return;
+      }
+
+      int width = Math.abs(currentPointInTicks.x - referencePointInTicks.x);
+      int height = Math.abs(currentPointInTicks.y - referencePointInTicks.y);
+
+      selectionRectangleInTicks = new Rectangle(x, adjustY(y), width, height + verticalOffset);
+      repaint();
+    }
+
+    public void mouseMoved(MouseEvent e)
+    {
+    }
+
+  }
+
+  public Midi getSelection()
+  {
+    return selection;
+  }
+
+  public void setSelection(Midi selection)
+  {
+    this.selection = selection;
+  }
+
+  private class NotatorMidiListener implements Midi.MidiListener
+  {
+
+    public void onAddMidel(Midi midi, Midel midel)
+    {
+      scheduleUpdateMidiDependencies();
+      scheduleUpdateTickMetrics(currentTick, true);
+    }
+
+    public void onRemoveMidel(Midi midi, Midel midel)
+    {
+      scheduleUpdateMidiDependencies();
+      scheduleUpdateTickMetrics(currentTick, true);
+    }
+
+  }
+
+  public class MidiComponentListener implements ComponentListener
+  {
+
+    public void componentHidden(ComponentEvent e)
+    {
+    }
+
+    public void componentMoved(ComponentEvent e)
+    {
+    }
+
+    public void componentResized(ComponentEvent e)
+    {
+      setTicksPerLine();
+      scheduleUpdateTickMetrics(currentTick, true);
+    }
+
+    public void componentShown(ComponentEvent e)
+    {
+    }
+
+  }
+
+}

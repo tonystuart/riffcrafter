@@ -1,0 +1,28 @@
+License Agreement
+
+The following is a legal agreement between RiffCrafter, Inc., the owner of the program (we, our, us), and the user of the program (you, your). The program includes whole or partial copies of the executable instructions, data and documentation.
+
+By downloading, installing, copying, accessing, or using the program you agree to the terms of this agreement. If you are accepting these terms on behalf of another person or a company or other legal entity, you represent and warrant that you have full authority to bind that person, company or legal entity to these terms.
+
+The program is our property, and we grant you a nonexclusive license to use the program when you lawfully acquire it. Title, ownership rights and intellectual property rights in and to the program shall remain with us. The program is protected by international copyright treaties.
+
+You may not use, copy, modify or distribute the program except as provided in this agreement; reverse assemble, reverse compile, or otherwise translate the program except as specifically permitted by law without the possibility of contractual waiver; or sublicense, rent, or lease the program.
+
+The license will terminate automatically if you fail to comply with the terms of this agreement. On termination, you must destroy all copies of the program. 
+
+You assign to us all right, title, and interest (including ownership of copyright) in any suggestions related to your use of the program that you provide to us.
+
+Neither party will charge the other for rights in data or any work performed as a result of this agreement.
+
+The program is provided on an as-is basis.
+
+Subject to any statutory warranties which cannot be excluded, we make no warranties or conditions either express or implied, including but not limited to, the implied warranties or conditions of merchantability, fitness for a particular purpose, and non-infringement.
+
+The entire risk as to the quality and performance of the program is borne by you. Should the program prove defective, you assume the entire cost of any service and repair. 
+ 
+Under no circumstances are we liable for any of the following, even if informed of their possibility: loss of, or damage to, software, hardware or data; special, incidental, or indirect damages, or for any economic consequential damages; lost profits, business, revenue, goodwill, or anticipated savings; or any and all other commercial damages or losses.
+
+This agreement will not create any right or cause of action for any third party, nor will we be responsible for any third party claims against you.
+
+In the event that any provision of this agreement is held to be invalid or unenforceable, the remaining provisions of this agreement remain in full force and effect.
+
